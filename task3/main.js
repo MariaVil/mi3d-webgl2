@@ -37,9 +37,10 @@ gui.add(settings, 'rotY', 0, 360, 1);
 gui.add(settings, 'rotZ', 0, 360, 1);
 gui.add(settings, 'visualization', {MIP: 'MIP', alpha: 'alpha'});
 
+const {gl, pr, pr1, vao, bwLocation, texLocation, lutLocation, wvpLocation, eyePosLocation, bwLocation1, texLocation1, lutLocation1, wvpLocation1, eyePosLocation1} = init()
 render()
 
-function init(visuzalization) {
+function init() {
     //get canvas ui element and set its internal resolution to align with its actual screen resolution
     const c = document.getElementById("canvas");
     c.width = c.clientWidth;
@@ -55,22 +56,26 @@ function init(visuzalization) {
 
     //-compile source code into shaders
     var vs = glutils.createShader(gl, gl.VERTEX_SHADER, vsSource);
-    var fs;
-    if (visuzalization === 'alpha') {
-        fs = glutils.createShader(gl, gl.FRAGMENT_SHADER, alphaFsSource);
-    } else {
-        fs = glutils.createShader(gl, gl.FRAGMENT_SHADER, mipFsSource);
-    }
+    var fs = glutils.createShader(gl, gl.FRAGMENT_SHADER, alphaFsSource);
+    var fs1 = glutils.createShader(gl, gl.FRAGMENT_SHADER, mipFsSource);
     //-assemble shaders into program (pipeline)
     var pr = glutils.createProgram(gl, vs, fs);
-    
+    var pr1 = glutils.createProgram(gl, vs, fs1);
+
     var positionAttributeLocation = gl.getAttribLocation(pr, "a_position");
     var texLocation = gl.getUniformLocation(pr, "u_texture");
     var lutLocation = gl.getUniformLocation(pr, "u_lut");
     var bwLocation = gl.getUniformLocation(pr, "bw");
     var wvpLocation = gl.getUniformLocation(pr, "worldViewProjection");
     var eyePosLocation = gl.getUniformLocation(pr, "eyePos");
-    
+
+    var positionAttributeLocation1 = gl.getAttribLocation(pr1, "a_position");
+    var texLocation1 = gl.getUniformLocation(pr1, "u_texture");
+    var lutLocation1 = gl.getUniformLocation(pr1, "u_lut");
+    var bwLocation1 = gl.getUniformLocation(pr1, "bw");
+    var wvpLocation1 = gl.getUniformLocation(pr1, "worldViewProjection");
+    var eyePosLocation1 = gl.getUniformLocation(pr1, "eyePos");
+
 
     //Init texture
     //-init texture object and fill with data
@@ -133,7 +138,9 @@ function init(visuzalization) {
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(geometry), gl.STATIC_DRAW);
     //-assign buffer to position attribute
     gl.enableVertexAttribArray(positionAttributeLocation);
+    gl.enableVertexAttribArray(positionAttributeLocation1);
     gl.vertexAttribPointer(positionAttributeLocation, 3, gl.FLOAT, false, 0, 0);
+    gl.vertexAttribPointer(positionAttributeLocation1, 3, gl.FLOAT, false, 0, 0);
     //-init index buffer and fill with data
     var indexBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
@@ -146,13 +153,12 @@ function init(visuzalization) {
     //enable scsissor to prevent clearing of other viewports
     gl.enable(gl.SCISSOR_TEST);
 
-    return {gl, pr, vao, bwLocation, texLocation, lutLocation, wvpLocation, eyePosLocation}
+    return {gl, pr, pr1, vao, bwLocation, texLocation, lutLocation, wvpLocation, eyePosLocation, bwLocation1, texLocation1, lutLocation1, wvpLocation1, eyePosLocation1}
 }
 
 function render() {
-    let {gl, pr, vao, bwLocation, texLocation, lutLocation, wvpLocation, eyePosLocation} = init(settings.visualization)
     let aspect = initViewport({x: 0, y: 0, width: gl.canvas.width, height: gl.canvas.height}, gl)
-    renderWithParameters(worldMatrix(), viewMatrix(), projectionMatrix(aspect), {gl, pr, vao, bwLocation, texLocation, lutLocation, wvpLocation, eyePosLocation})
+    renderWithParameters(worldMatrix(), viewMatrix(), projectionMatrix(aspect))
     requestAnimationFrame(render)
 }
 
@@ -168,32 +174,35 @@ function initViewport(region, gl) {
     return region.width / region.height;
 }
 
-function renderWithParameters(world, view, proj, {gl, pr, vao, bwLocation, texLocation, lutLocation, wvpLocation, eyePosLocation}){
+function renderWithParameters(world, view, proj){
     let wvp = mat4.create()
     mat4.mul(wvp, wvp, proj);
     mat4.mul(wvp, wvp, view);
     mat4.mul(wvp, wvp, world);
-
-    //use graphic pipeline defined by shader program *pr*
-    gl.useProgram(pr);
-    //set geometry to draw
-    gl.bindVertexArray(vao);
-
-    gl.uniform2fv(bwLocation, [settings.black, settings.white]);
-
     let iv = mat4.invert(mat4.create(), view)
     let iw = mat4.invert(mat4.create(), world)
     var m = mat4.mul(mat4.create(), iw, iv);
 
     let eye = vec3.transformMat4(vec3.create(), [0, 0, 0], m);
 
-    gl.uniform3fv(eyePosLocation, eye);
-
-	gl.uniform1i(texLocation, 0);
-	gl.uniform1i(lutLocation, 1);
-
-    gl.uniformMatrix4fv(wvpLocation, false, wvp);
-
+    //use graphic pipeline defined by shader program *pr*
+    if (settings.visualization === "alpha") {
+        gl.useProgram(pr);
+        gl.uniform2fv(bwLocation, [settings.black, settings.white]);
+        gl.uniform3fv(eyePosLocation, eye);
+        gl.uniform1i(texLocation, 0);
+        gl.uniform1i(lutLocation, 1);
+        gl.uniformMatrix4fv(wvpLocation, false, wvp);
+    } else {
+        gl.useProgram(pr1)
+        gl.uniform2fv(bwLocation1, [settings.black, settings.white]);
+        gl.uniform3fv(eyePosLocation1, eye);
+        gl.uniform1i(texLocation1, 0);
+        gl.uniform1i(lutLocation1, 1);
+        gl.uniformMatrix4fv(wvpLocation1, false, wvp);
+    }
+    //set geometry to draw
+    gl.bindVertexArray(vao);
     gl.drawElements(gl.TRIANGLES, 36, gl.UNSIGNED_SHORT, 0);
 }
 
@@ -222,10 +231,3 @@ function viewMatrix() {
 function projectionMatrix(aspect) {
     return mat4.perspective(mat4.create(), 0.5, aspect, 0.1, 10000)
 }
-
-
-
-
-
-
-
