@@ -73,7 +73,6 @@ window.addEventListener("mousemove", e => {
         if (settings.white < minValue) settings.white = minValue
         if (settings.white > maxValue) settings.white = maxValue
         gui.updateDisplay()
-        window.requestAnimationFrame(render)
     }
 })
 
